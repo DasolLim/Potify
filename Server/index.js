@@ -320,3 +320,57 @@ app.post('/api/createPlaylist/:n', (req, res) => {
         });
     });
 });
+
+
+//returns the collaborators of a playlist
+app.get('/api/collaborators/:playlistName', (req, res) => {
+    const playlistName = req.params.playlistName;
+    connection.query(`SELECT
+    c.collaborator,
+    u.username AS collaboratorUsername
+  FROM
+    Collaborators c
+  JOIN
+    Playlist p ON c.playlistID = p.playlistID
+  JOIN
+    User u ON c.collaborator = u.username
+  WHERE
+    p.playlistName = '${playlistName}';
+  
+    `, (error, results) => {
+        if (error) {
+            res.status(500).send(error.message);
+        } else {
+            res.json(results);
+        }
+    });
+});
+
+//add collaborator to playlist
+app.post('/api/addCollaborator/:usernameAndPlaylistID', (req, res) => {
+    const username = req.params.usernameAndPlaylistID;
+    //assuming we are receiving the URL in the format: /api/addCollaborator/username?playlistID=1
+    const playlistID = req.query.playlistID;
+    connection.beginTransaction((err) => {
+        if (err) {
+            return res.status(500).send(err.message);
+        }
+
+        // insert into collab table
+        connection.query('INSERT INTO Collaborators (collaborator, playlistID) VALUES (?, ?)', [username, playlistID], (error, result) => {
+            if (error) {
+                return connection.rollback(() => {
+                    res.status(500).send(error.message);
+                });
+            }
+            connection.commit((commitErr) => {
+                if (commitErr) {
+                    return connection.rollback(() => {
+                        res.status(500).send(commitErr.message);
+                    });
+                }
+                res.json({ success: true, message: 'Successfully added collaborator' });
+            })
+        });
+    });
+});
