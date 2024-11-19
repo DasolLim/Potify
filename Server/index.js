@@ -155,3 +155,30 @@ app.get('/api/topUser', (req, res) => {
         }
     });
 });
+
+
+// 7)  Calculates all the artists with a specific top genre based on the count of songs for each genre. 
+app.get('/api/artistsTopGenre', (req, res) => {
+    connection.query(`WITH RankedArtists AS (
+        SELECT
+            u.artistName,
+            s.genre AS mostFrequentGenre,
+            RANK() OVER (PARTITION BY u.artistName ORDER BY COUNT(*) DESC) AS artistRank
+        FROM
+            User u
+        JOIN Song s ON u.username = s.artistID
+        GROUP BY u.artistName, s.genre
+    )
+    SELECT artistName, mostFrequentGenre
+    FROM RankedArtists
+    WHERE artistRank = 1 && mostFrequentGenre = 'hiphop'
+    LIMIT 4;
+    
+    `, (error, results) => {
+        if (error) {
+            res.status(500).send(error.message);
+        } else {
+            res.json(results);
+        }
+    });
+});
