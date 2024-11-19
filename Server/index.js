@@ -374,3 +374,10 @@ app.post('/api/addCollaborator/:usernameAndPlaylistID', (req, res) => {
         });
     });
 });
+
+app.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+});
+
+// USE FOR OPTION #5 (USER LOGIN)
+// Not really implemented yet, not sure how we will do this one
