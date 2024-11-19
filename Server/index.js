@@ -156,7 +156,6 @@ app.get('/api/topUser', (req, res) => {
     });
 });
 
-
 // 7)  Calculates all the artists with a specific top genre based on the count of songs for each genre. 
 app.get('/api/artistsTopGenre', (req, res) => {
     connection.query(`WITH RankedArtists AS (
@@ -180,5 +179,144 @@ app.get('/api/artistsTopGenre', (req, res) => {
         } else {
             res.json(results);
         }
+    });
+});
+
+
+// Recommends album to user based on initial genre 
+app.get('/api/recommendedAlbum', (req, res) => {
+    connection.query(`WITH PlaylistGenres AS (
+      SELECT
+          ps.playlistID,
+          p.playlistName,
+          s.genre AS playlistMostCommonGenre,
+          RANK() OVER (PARTITION BY ps.playlistID, s.genre ORDER BY COUNT(*) DESC) AS genreRank
+      FROM
+          PlaylistSongs ps
+      JOIN ArtistAlbum aa ON ps.playlistID = aa.playlistID
+      JOIN Song s ON aa.artistID = s.artistID
+      JOIN Playlist p ON ps.playlistID = p.playlistID
+      GROUP BY ps.playlistID, p.playlistName, s.genre
+  ),
+  UserGenreMatch AS (
+      SELECT
+          u.username,
+          u.userType,
+          pg.playlistMostCommonGenre
+      FROM
+          User u
+      JOIN PlaylistGenres pg ON u.genrePref = pg.playlistMostCommonGenre
+      WHERE u.userType = 'l'
+  )
+  SELECT DISTINCT
+      ugm.username,
+      ugm.userType,
+      ugm.playlistMostCommonGenre,
+      pg.playlistID,
+      pg.playlistName
+  FROM
+      UserGenreMatch ugm
+  JOIN PlaylistGenres pg ON ugm.playlistMostCommonGenre = pg.playlistMostCommonGenre
+  WHERE pg.genreRank = 1 AND ugm.username = 'bob420'; 
+    `, (error, results) => {
+        if (error) {
+            res.status(500).send(error.message);
+        } else {
+            res.json(results);
+        }
+    });
+});
+
+// returns all the playlists of a user
+app.get('/api/userPlaylists', (req, res) => {
+    connection.query(`SELECT * FROM Playlist WHERE creator = 'bob420' LIMIT 4;
+    `, (error, results) => {
+        if (error) {
+            console.error("SQL error:", error);
+            res.status(500).send(error.message);
+        } else {
+            console.log("Displaying results:");
+            console.log(results);
+            console.log("END displaying results:");
+            res.json(results);
+        }
+    });
+});
+
+// returns all songs in a playlist
+app.get('/api/playlistSongs/:playlistName', (req, res) => {
+    const playlistName = req.params.playlistName;
+    connection.query(`SELECT
+    s.songID,
+    s.artistID,
+    s.songName,
+    s.genre,
+    s.length,
+    s.songURL,
+    s.dateAdded
+  FROM
+    Playlist AS p
+  JOIN
+    PlaylistSongs AS ps ON p.playlistID = ps.playlistID
+  JOIN
+    Song AS s ON ps.songID = s.songID
+  WHERE
+    p.playlistName = '${playlistName}';
+    `, (error, results) => {
+        if (error) {
+            res.status(500).send(error.message);
+        } else {
+            res.json(results);
+        }
+    });
+});
+app.post('/api/createPlaylist/:n', (req, res) => {
+    const n = req.params.n;
+    connection.beginTransaction((err) => {
+        if (err) {
+            return res.status(500).send(err.message);
+        }
+
+        // Insert a playlist with the creator being bob420 into Playlist table
+        connection.query('INSERT INTO Playlist (creator, playlistName) VALUES (?, ?)', ['bob420', `Random Playlist ${n}`], (error, playlistResult) => {
+            if (error) {
+                return connection.rollback(() => {
+                    res.status(500).send(error.message);
+                });
+            }
+
+            const playlistID = playlistResult.insertId;
+
+            // Select 5 random songs from the user's preferred genre and add them to the playlist
+            connection.query('INSERT INTO PlaylistSongs (playlistID, songID) SELECT ?, songID FROM Song WHERE genre = (SELECT genrePref FROM User WHERE username = ?) ORDER BY RAND() LIMIT 5', [playlistID, 'bob420'], (err, results) => {
+                if (err) {
+                    return connection.rollback(() => {
+                        res.status(500).send(err.message);
+                    });
+                }
+
+                const songIDs = [results.insertId]; // Use the insertId directly
+
+                connection.commit((err) => {
+                    if (err) {
+                        return connection.rollback(() => {
+                            res.status(500).send(err.message);
+                        });
+                    }
+
+                    // Retrieve the playlist name
+                    connection.query('SELECT playlistName FROM Playlist WHERE playlistID = ?', [playlistID], (err, nameResult) => {
+                        if (err) {
+                            return res.status(500).send(err.message);
+                        }
+
+                        const playlistName = nameResult[0].playlistName;
+
+                        // Return the playlistName along with the songIDs
+                        res.json({ playlistName, songIDs, playlistID });
+                    });
+                });
+            });
+        });
     });
 });
