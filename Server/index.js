@@ -23,3 +23,41 @@ const connection = createConnection({
 });
 
 connection.connect();
+
+// 1) This will match each listener with an album depending on their initial preferred genre
+// THIS USES QUERY #1 FROM ASSIGNMENT 3
+app.get('/api/listenersPreferredGenre', (req, res) => {
+    connection.query(`WITH PlaylistGenres AS (
+        SELECT
+            ps.playlistID,
+            s.genre AS playlistMostCommonGenre,
+            RANK() OVER (PARTITION BY ps.playlistID, s.genre ORDER BY COUNT(*) DESC) AS genreRank
+        FROM
+            PlaylistSongs ps
+        JOIN ArtistAlbum aa ON ps.playlistID = aa.playlistID
+        JOIN Song s ON aa.artistID = s.artistID
+        GROUP BY ps.playlistID, s.genre
+    ),
+    UserGenreMatch AS (
+        SELECT
+            u.username,
+            u.userType,
+            pg.playlistMostCommonGenre
+        FROM
+            User u
+        JOIN PlaylistGenres pg ON u.genrePref = pg.playlistMostCommonGenre
+        WHERE u.userType = 'l'
+    )
+    SELECT
+        playlistMostCommonGenre,
+        COUNT(username) AS numberOfUsers
+    FROM UserGenreMatch
+    GROUP BY playlistMostCommonGenre
+    ORDER BY numberOfUsers DESC;`, (error, results) => {
+        if (error) {
+            res.status(500).send(error.message);
+        } else {
+            res.json(results);
+        }
+    });
+});
