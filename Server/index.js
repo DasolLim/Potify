@@ -140,3 +140,18 @@ app.get('/api/songsListenedDate', (req, res) => {
         }
     });
 });
+
+// 6) This will give us the #1 Potify user. 
+app.get('/api/topUser', (req, res) => {
+    connection.query(`SELECT username, SUM(secondsListened) AS totalListenTime 
+    FROM ListenTime 
+    GROUP BY username
+    ORDER BY totalListenTime DESC
+    LIMIT 1;`, (error, results) => {
+        if (error) {
+            res.status(500).send(error.message);
+        } else {
+            res.json(results);
+        }
+    });
+});
