@@ -100,3 +100,28 @@ app.get('/api/listenTimeGenre', (req, res) => {
         }
     });
 });
+
+// 4) Finds the most listened-to genre for each user by calculating the total listening time for each genre, 
+// ranking the genres within each user's partition, and then selecting the users with the top genre ‘possimus’.
+app.get('/api/topListenedGenre', (req, res) => {
+    connection.query(`WITH RankedGenres AS (
+        SELECT
+            l.username,
+            s.genre,
+            SUM(l.secondsListened) AS totalTime,
+            ROW_NUMBER() OVER (PARTITION BY l.username ORDER BY SUM(l.secondsListened) DESC) AS genreRank
+        FROM ListenTime l
+        JOIN Song s ON l.songID = s.songID
+        GROUP BY l.username, s.genre
+    )
+    SELECT username, genre
+    FROM RankedGenres
+    WHERE genreRank = 1 && genre = "hiphop"
+    LIMIT 4;`, (error, results) => {
+        if (error) {
+            res.status(500).send(error.message);
+        } else {
+            res.json(results);
+        }
+    });
+});
