@@ -125,3 +125,18 @@ app.get('/api/topListenedGenre', (req, res) => {
         }
     });
 });
+
+// 5) This will return the songs that have been listened to by at least 1 person on a specific date.
+app.get('/api/songsListenedDate', (req, res) => {
+    connection.query(`SELECT * FROM Song
+    WHERE EXISTS(
+        SELECT 1
+        FROM ListenTime
+        WHERE Song.songID = ListenTime.songID && ListenTime.listenDate = '1975-10-28');`, (error, results) => {
+        if (error) {
+            res.status(500).send(error.message);
+        } else {
+            res.json(results);
+        }
+    });
+});
