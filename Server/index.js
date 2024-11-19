@@ -84,3 +84,19 @@ app.get('/api/totalSongListenTime', (req, res) => {
             }
         });
 });
+
+// 3) It will group them by username and genre and add up the secondsListened for each song under that username, 
+// genre combo. This will tell us how long a user listened to a specific genre.
+//how long each user listened to each genre
+app.get('/api/listenTimeGenre', (req, res) => {
+    connection.query(`SELECT  l.username, s.genre, SUM(l.secondsListened) AS totalTime
+    FROM ListenTime l, Song s
+    WHERE l.songID = s.songID
+    GROUP BY l.username, s.genre;`, (error, results) => {
+        if (error) {
+            res.status(500).send(error.message);
+        } else {
+            res.json(results);
+        }
+    });
+});
